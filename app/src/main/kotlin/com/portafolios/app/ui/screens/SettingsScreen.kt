@@ -27,6 +27,7 @@ fun SettingsScreen(c: AppContainer, onBack: () -> Unit) {
     val snackbar = remember { SnackbarHostState() }
     var apiKey by remember { mutableStateOf(c.secrets.getString(SecretStore.FINNHUB_API_KEY).orEmpty()) }
     var lock by remember { mutableStateOf(c.settings.lockEnabled) }
+    var screenshots by remember { mutableStateOf(c.settings.allowScreenshots) }
     var backupPassword by remember { mutableStateOf("") }
     var pendingRestore by remember { mutableStateOf<android.net.Uri?>(null) }
     val backup = remember { BackupManager(c.db) }
@@ -68,6 +69,17 @@ fun SettingsScreen(c: AppContainer, onBack: () -> Unit) {
                     Text("Se vuelve a pedir tras 1 minuto en segundo plano.", style = MaterialTheme.typography.bodySmall)
                 }
                 Switch(checked = lock, onCheckedChange = { lock = it; c.settings.lockEnabled = it })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Permitir capturas de pantalla")
+                    Text("Desactivado, las capturas salen en negro para proteger tus datos.", style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(checked = screenshots, onCheckedChange = {
+                    screenshots = it
+                    c.settings.allowScreenshots = it
+                    (context as? android.app.Activity)?.window?.let { w -> com.portafolios.app.MainActivity.applyScreenshotSetting(w, it) }
+                })
             }
             Text(
                 "Tus datos están cifrados en este móvil (AES-256) y no se suben a ningún servidor. La app nunca pide la contraseña de tu broker.",

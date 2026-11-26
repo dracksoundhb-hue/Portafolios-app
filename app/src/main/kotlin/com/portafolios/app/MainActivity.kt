@@ -29,8 +29,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // No screenshots, no screen recording and a blank preview in the recent apps list.
-        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        applyScreenshotSetting(window, container.settings.allowScreenshots)
         enableEdgeToEdge()
         prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
@@ -84,6 +83,12 @@ class MainActivity : FragmentActivity() {
     }
 
     companion object {
+        /** Unless the user allows them: no screenshots, no screen recording, blank preview in recent apps. */
+        fun applyScreenshotSetting(window: android.view.Window, allow: Boolean) {
+            if (allow) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            else window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        }
+
         // Process-wide: cleared when the process dies, so a restart always asks again.
         private var unlockedInProcess = false
         private var backgroundedAt = 0L

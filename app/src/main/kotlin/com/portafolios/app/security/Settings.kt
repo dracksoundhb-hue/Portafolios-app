@@ -10,6 +10,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("lock_enabled", true)
         set(v) = prefs.edit().putBoolean("lock_enabled", v).apply()
 
+    /** Off by default: screenshots and screen recording show a black screen. */
+    var allowScreenshots: Boolean
+        get() = prefs.getBoolean("allow_screenshots", false)
+        set(v) = prefs.edit().putBoolean("allow_screenshots", v).apply()
+
     /** Seconds in background before the app locks again. */
     var lockTimeoutSeconds: Int
         get() = prefs.getInt("lock_timeout", 60)
