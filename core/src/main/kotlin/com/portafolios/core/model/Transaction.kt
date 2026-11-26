@@ -3,8 +3,10 @@ package com.portafolios.core.model
 import java.math.BigDecimal
 import java.security.MessageDigest
 import java.time.LocalDate
+import java.time.LocalTime
 
-enum class TxType { BUY, SELL, DIVIDEND, DEPOSIT, WITHDRAWAL, FEE, TAX, INTEREST, SPLIT }
+/** SHORT opens or adds to a short position; COVER buys it back. */
+enum class TxType { BUY, SELL, SHORT, COVER, DIVIDEND, DEPOSIT, WITHDRAWAL, FEE, TAX, INTEREST, SPLIT }
 
 /**
  * A normalized transaction read from a broker statement.
@@ -29,6 +31,10 @@ data class Transaction(
     val name: String? = null,
     /** Broker's own id for the row when it has one (order id, transaction id...). */
     val brokerRef: String? = null,
+    /** Time of day when the statement gives it; orders same-day operations (not part of the fingerprint). */
+    val time: LocalTime? = null,
+    /** The broker says this operation closes the whole position (clears rounding leftovers). */
+    val closesPosition: Boolean = false,
 ) {
     /** Key used to group transactions of the same instrument. */
     val instrumentKey: String? get() = symbol?.uppercase() ?: isin?.uppercase()

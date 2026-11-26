@@ -58,6 +58,13 @@ class MarketRepository(private val db: AppDatabase, private val client: FinnhubC
 
     private suspend fun ensureProfile(key: String): ProfileEntity? {
         val cached = db.market().profile(key)
+        CRYPTO.find(key)?.let { m ->
+            // Crypto pairs (ETH/USD): price from Binance through Finnhub.
+            if (cached != null) return cached
+            val entity = ProfileEntity(key, "BINANCE:${m.groupValues[1]}USDT", m.groupValues[1], "Criptomonedas", null, System.currentTimeMillis())
+            db.market().upsertProfile(entity)
+            return entity
+        }
         if (cached != null && System.currentTimeMillis() - cached.updatedAt < WEEK_MS) return cached
         val ticker = if (ISIN.matches(key)) client.search(key).result.firstOrNull()?.symbol ?: return cached else key
         val p = runCatching { client.profile(ticker) }.getOrNull()
@@ -71,6 +78,7 @@ class MarketRepository(private val db: AppDatabase, private val client: FinnhubC
 
     companion object {
         private const val WEEK_MS = 7L * 24 * 3600 * 1000
+        private val CRYPTO = Regex("^([A-Z0-9]+)/(USD|USDT|USDC)$")
         private val ISIN = Regex("^[A-Z]{2}[A-Z0-9]{9}[0-9]$")
     }
 }

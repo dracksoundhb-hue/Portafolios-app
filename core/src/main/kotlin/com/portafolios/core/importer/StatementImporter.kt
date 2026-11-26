@@ -27,7 +27,7 @@ object StatementImporter {
     private val dedicated: Map<Broker, StatementParser> = listOf(
         InteractiveBrokersParser(), SchwabParser(), RevolutParser(), XtbParser(), RobinhoodParser(),
         Trading212Parser(), DegiroParser(), YahooFinanceParser(), EtoroParser(), EtradeParser(),
-        SnowballParser(), WebullParser(), TastytradeParser(), RobinhoodCryptoParser(),
+        SnowballParser(), WebullParser(), TastytradeParser(), RobinhoodCryptoParser(), QuantfuryParser(),
     ).associateBy { it.broker }
 
     fun parserFor(broker: Broker): StatementParser = dedicated[broker] ?: GenericParser(broker)
@@ -39,17 +39,16 @@ object StatementImporter {
      */
     fun preview(file: StatementFile, broker: Broker, existingFingerprints: Set<String>): ImportPreview {
         if (file.bytes.size > MAX_FILE_BYTES) return ImportPreview(broker, emptyList(), emptyList(), 0, error = "El archivo supera 20 MB.")
-        when (file.kind) {
-            StatementFile.Kind.PDF -> return ImportPreview(
-                broker, emptyList(), emptyList(), 0,
-                error = "Los PDF todavía no están soportados. Descarga el historial en CSV o Excel: ${broker.fileHint}.",
-            )
-            StatementFile.Kind.UNKNOWN -> return ImportPreview(broker, emptyList(), emptyList(), 0, error = "Formato de archivo no reconocido.")
-            else -> {}
+        if (file.kind == StatementFile.Kind.UNKNOWN) return ImportPreview(broker, emptyList(), emptyList(), 0, error = "Formato de archivo no reconocido.")
+        if (file.kind == StatementFile.Kind.PDF && !file.canReadPdf) return ImportPreview(broker, emptyList(), emptyList(), 0, error = "No se pueden leer PDF aquí. Usa el CSV o Excel: ${broker.fileHint}.")
+        val tables = try {
+            file.tables()
+        } catch (e: PdfPasswordException) {
+            return ImportPreview(broker, emptyList(), emptyList(), 0, error = "El PDF está protegido con contraseña. Descárgalo sin contraseña o usa el CSV: ${broker.fileHint}.")
+        } catch (e: Exception) {
+            return ImportPreview(broker, emptyList(), emptyList(), 0, error = "No se pudo leer el archivo: ${e.message}")
         }
-        val tables = runCatching { file.tables() }.getOrElse {
-            return ImportPreview(broker, emptyList(), emptyList(), 0, error = "No se pudo leer el archivo: ${it.message}")
-        }
+        if (file.kind == StatementFile.Kind.PDF) return previewPdf(tables, broker, existingFingerprints)
         val parser = parserFor(broker)
         if (!parser.canParse(tables)) {
             val suggestion = dedicated.values.firstOrNull { it.broker != broker && it.canParse(tables) }?.broker
@@ -62,6 +61,28 @@ object StatementImporter {
             )
         }
         return build(broker, parser.parse(tables), existingFingerprints, null)
+    }
+
+    /**
+     * PDF: first try the broker's table parser (tabular statements keep their columns), then the generic
+     * table reader, then the line-by-line reader for confirmations and free-form statements.
+     */
+    private fun previewPdf(tables: List<Table>, broker: Broker, existing: Set<String>): ImportPreview {
+        if (tables.all { it.rows.isEmpty() }) return ImportPreview(
+            broker, emptyList(), emptyList(), 0,
+            error = "Este PDF no contiene texto (parece una imagen escaneada). Descarga el extracto original del broker o el CSV: ${broker.fileHint}.",
+        )
+        val candidates = listOf(parserFor(broker), GenericParser(broker)).filter { it.canParse(tables) }
+        for (p in candidates) {
+            val r = p.parse(tables)
+            if (r.transactions.isNotEmpty()) return build(broker, r, existing, null)
+        }
+        val r = PdfLineParser(broker).parse(tables)
+        if (r.transactions.isEmpty()) return ImportPreview(
+            broker, emptyList(), r.issues, 0,
+            error = "No se encontraron operaciones en este PDF. Si me pasas un ejemplo, añado su formato. Mientras tanto puedes usar: ${broker.fileHint}.",
+        )
+        return build(broker, r, existing, null)
     }
 
     private fun build(broker: Broker, result: ParseResult, existing: Set<String>, suggestion: Broker?): ImportPreview {

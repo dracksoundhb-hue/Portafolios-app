@@ -94,6 +94,7 @@ dependencies {
     implementation(libs.androidx.fragment)
     implementation(libs.androidx.work.runtime)
     implementation(libs.okhttp)
+    implementation(libs.pdfbox.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
 

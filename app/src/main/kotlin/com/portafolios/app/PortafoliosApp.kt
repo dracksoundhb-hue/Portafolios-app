@@ -15,6 +15,7 @@ class PortafoliosApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(applicationContext)
         container = AppContainer(this)
         PriceAlertWorker.createChannel(this)
     }

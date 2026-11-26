@@ -70,7 +70,7 @@ class ImportViewModel(private val c: AppContainer, private val portfolioId: Long
         val name = fileName.value ?: "archivo"
         val existing = c.portfolios.fingerprints(portfolioId)
         val b = currentBroker()
-        preview.value = withContext(Dispatchers.Default) { StatementImporter.preview(StatementFile(name, bytes), b, existing) }
+        preview.value = withContext(Dispatchers.Default) { StatementImporter.preview(StatementFile(name, bytes, com.portafolios.app.data.PdfBoxSource), b, existing) }
     }
 
     fun confirm() = viewModelScope.launch {
@@ -141,7 +141,7 @@ fun ImportScreen(c: AppContainer, portfolioId: Long, onBack: () -> Unit) {
                 Button(
                     onClick = { picker.launch(arrayOf("text/*", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel", "application/pdf", "application/octet-stream")) },
                     enabled = !busy, modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (fileName == null) "Elegir archivo (CSV o Excel)" else "Elegir otro archivo") }
+                ) { Text(if (fileName == null) "Elegir archivo (PDF, CSV o Excel)" else "Elegir otro archivo") }
                 Text(
                     "El archivo se lee solo en este móvil. Nada se guarda hasta que confirmes. Subir el mismo periodo dos veces es seguro: las operaciones repetidas se ignoran.",
                     style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp),

@@ -15,5 +15,6 @@ kotlin {
 
 dependencies {
     testImplementation(libs.junit)
+    testImplementation(libs.pdfbox)
     testImplementation(kotlin("test-junit"))
 }

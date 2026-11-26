@@ -15,7 +15,7 @@ enum class Broker(val displayName: String, val fileHint: String) {
     YAHOO_FINANCE("Yahoo Finance", "Exportación de cartera en CSV"),
     ETORO("eToro", "Account statement en Excel (.xlsx), hoja Account Activity"),
     ETRADE("E*Trade", "Historial de transacciones en CSV"),
-    QUANTFURY("Quantfury", "Historial en CSV (importador genérico)"),
+    QUANTFURY("Quantfury", "Informe del historial de trading en PDF"),
     SNOWBALL_ANALYTICS("Snowball Analytics", "Exportación de operaciones en CSV"),
     WEBULL("Webull", "Historial de órdenes en CSV"),
     TASTYTRADE("tastytrade", "Historial de transacciones en CSV"),

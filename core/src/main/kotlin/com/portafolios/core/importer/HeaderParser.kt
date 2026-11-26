@@ -36,6 +36,8 @@ abstract class HeaderParser(override val broker: Broker) : StatementParser {
     protected open val monthFirst: Boolean? = null
     protected open fun decimalComma(cols: Columns): Boolean? = null
     protected open fun acceptsTable(table: Table): Boolean = true
+    /** How many rows from the top to search for the header (PDFs have long preambles). */
+    protected open fun headerScanRows(): Int = 15
     protected abstract fun matches(cols: Columns): Boolean
     protected abstract fun read(row: Row): RowResult
 
@@ -43,14 +45,14 @@ abstract class HeaderParser(override val broker: Broker) : StatementParser {
     protected open fun beforeTable(table: Table, headerIndex: Int) {}
 
     override fun canParse(tables: List<Table>) =
-        tables.any { acceptsTable(it) && it.headerRow(predicate = ::matches) != null }
+        tables.any { acceptsTable(it) && it.headerRow(headerScanRows(), ::matches) != null }
 
     override fun parse(tables: List<Table>): ParseResult {
         val txs = mutableListOf<Transaction>()
         val issues = mutableListOf<ParseIssue>()
         var skipped = 0
         for (table in tables.filter(::acceptsTable)) {
-            val h = table.headerRow(predicate = ::matches) ?: continue
+            val h = table.headerRow(headerScanRows(), ::matches) ?: continue
             beforeTable(table, h)
             val cols = Columns(table.rows[h])
             val dc = decimalComma(cols)

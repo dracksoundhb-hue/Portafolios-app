@@ -4,7 +4,12 @@ package com.portafolios.core.importer
 data class Table(val name: String, val rows: List<List<String>>)
 
 /** Raw file chosen by the user. */
-class StatementFile(val fileName: String, val bytes: ByteArray) {
+class StatementFile(
+    val fileName: String,
+    val bytes: ByteArray,
+    /** Needed only for PDF files; the core module has no PDF library of its own. */
+    private val pdfSource: PdfTextSource? = null,
+) {
     enum class Kind { CSV, XLSX, PDF, UNKNOWN }
 
     val kind: Kind
@@ -17,10 +22,13 @@ class StatementFile(val fileName: String, val bytes: ByteArray) {
             else -> Kind.UNKNOWN
         }
 
+    val canReadPdf: Boolean get() = pdfSource != null
+
     fun tables(): List<Table> = when (kind) {
         Kind.CSV -> listOf(Table(fileName, CsvReader.read(decodeText(bytes))))
         Kind.XLSX -> XlsxReader.read(bytes)
-        Kind.PDF, Kind.UNKNOWN -> emptyList()
+        Kind.PDF -> pdfSource?.let { listOf(Table(fileName, PdfLayout.rows(it.glyphs(bytes)))) } ?: emptyList()
+        Kind.UNKNOWN -> emptyList()
     }
 
     companion object {

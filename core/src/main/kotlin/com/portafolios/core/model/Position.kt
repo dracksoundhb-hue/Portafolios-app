@@ -12,8 +12,10 @@ data class Position(
     val realizedPnl: BigDecimal,
     val dividends: BigDecimal,
 ) {
+    /** Negative for short positions, like [quantity]. */
     val costBasis: BigDecimal get() = quantity * averageCost
     val isOpen: Boolean get() = quantity.signum() != 0
+    val isShort: Boolean get() = quantity.signum() < 0
 }
 
 data class Quote(val symbol: String, val price: BigDecimal, val change: BigDecimal, val changePercent: BigDecimal)

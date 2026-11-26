@@ -19,7 +19,7 @@ data class Holding(
     val unrealizedPnl: BigDecimal? get() = marketValue?.minus(position.costBasis)
     val unrealizedPnlPercent: BigDecimal?
         get() = unrealizedPnl?.takeIf { position.costBasis.signum() != 0 }
-            ?.divide(position.costBasis, MC)?.multiply(HUNDRED)
+            ?.divide(position.costBasis.abs(), MC)?.multiply(HUNDRED)
     val dayChange: BigDecimal? get() = quote?.let { position.quantity * it.change }
 }
 
@@ -29,6 +29,8 @@ data class PortfolioSummary(
     val marketValue: BigDecimal,
     val costBasis: BigDecimal,
     val unrealizedPnl: BigDecimal,
+    /** Sum of absolute cost of priced positions (longs and shorts), base for the P/L percentage. */
+    val grossCost: BigDecimal,
     val realizedPnl: BigDecimal,
     val dividends: BigDecimal,
     val dayChange: BigDecimal,
@@ -36,7 +38,7 @@ data class PortfolioSummary(
     val weights: Map<String, BigDecimal>,
 ) {
     val unrealizedPnlPercent: BigDecimal
-        get() = if (costBasis.signum() == 0) BigDecimal.ZERO else unrealizedPnl.divide(costBasis, MC).multiply(HUNDRED)
+        get() = if (grossCost.signum() == 0) BigDecimal.ZERO else unrealizedPnl.divide(grossCost, MC).multiply(HUNDRED)
 }
 
 object PortfolioCalculator {
@@ -52,6 +54,12 @@ object PortfolioCalculator {
             if (a.name == null) a.name = tx.name
             when (tx.type) {
                 TxType.BUY -> {
+                    if (a.qty.signum() < 0) { // buying while short: treat as a cover
+                        a.realized += tx.quantity.min(-a.qty) * (a.avg - tx.price) - tx.fee
+                        a.qty += tx.quantity
+                        if (a.qty.signum() >= 0) a.avg = tx.price
+                        continue
+                    }
                     val cost = a.qty * a.avg + tx.quantity * tx.price + tx.fee
                     a.qty += tx.quantity
                     a.avg = if (a.qty.signum() == 0) BigDecimal.ZERO else cost.divide(a.qty, MC)
@@ -61,7 +69,21 @@ object PortfolioCalculator {
                     val sold = tx.quantity.min(a.qty.max(BigDecimal.ZERO))
                     a.realized += sold * (tx.price - a.avg) - tx.fee
                     a.qty -= tx.quantity
-                    if (a.qty.abs() < BigDecimal("0.000001")) { a.qty = BigDecimal.ZERO; a.avg = BigDecimal.ZERO }
+                    if (a.qty.abs() < DUST) { a.qty = BigDecimal.ZERO; a.avg = BigDecimal.ZERO }
+                }
+                TxType.SHORT -> {
+                    // Average entry price of the short, fees lower the proceeds.
+                    val shortQty = (-a.qty).max(BigDecimal.ZERO)
+                    val proceeds = shortQty * a.avg + tx.quantity * tx.price - tx.fee
+                    a.qty -= tx.quantity
+                    a.avg = proceeds.divide(-a.qty, MC)
+                    a.currency = tx.currency
+                }
+                TxType.COVER -> {
+                    val covered = tx.quantity.min((-a.qty).max(BigDecimal.ZERO))
+                    a.realized += covered * (a.avg - tx.price) - tx.fee
+                    a.qty += tx.quantity
+                    if (a.qty.abs() < DUST) { a.qty = BigDecimal.ZERO; a.avg = BigDecimal.ZERO }
                 }
                 TxType.SPLIT -> if (tx.quantity.signum() > 0) {
                     a.qty *= tx.quantity
@@ -70,6 +92,9 @@ object PortfolioCalculator {
                 TxType.DIVIDEND -> a.dividends += tx.amount
                 TxType.TAX -> a.dividends -= tx.amount
                 else -> {}
+            }
+            if (tx.closesPosition && a.qty.abs() <= tx.quantity.multiply(BigDecimal("0.01"))) {
+                a.qty = BigDecimal.ZERO; a.avg = BigDecimal.ZERO
             }
         }
         return acc.map { (symbol, a) ->
@@ -83,8 +108,8 @@ object PortfolioCalculator {
         fun add(cur: String, v: BigDecimal) { cash[cur] = (cash[cur] ?: BigDecimal.ZERO) + v }
         for (tx in transactions) {
             when (tx.type) {
-                TxType.BUY -> add(tx.currency, -(tx.amount + tx.fee))
-                TxType.SELL -> add(tx.currency, tx.amount - tx.fee)
+                TxType.BUY, TxType.COVER -> add(tx.currency, -(tx.amount + tx.fee))
+                TxType.SELL, TxType.SHORT -> add(tx.currency, tx.amount - tx.fee)
                 TxType.DEPOSIT, TxType.DIVIDEND, TxType.INTEREST -> add(tx.currency, tx.amount)
                 TxType.WITHDRAWAL, TxType.FEE, TxType.TAX -> add(tx.currency, -tx.amount)
                 TxType.SPLIT -> {}
@@ -99,15 +124,18 @@ object PortfolioCalculator {
         val priced = holdings.filter { it.marketValue != null }
         val marketValue = priced.fold(BigDecimal.ZERO) { s, h -> s + h.marketValue!! }
         val cost = priced.fold(BigDecimal.ZERO) { s, h -> s + h.position.costBasis }
-        val weights = if (marketValue.signum() == 0) emptyMap() else priced.associate {
-            it.position.symbol to it.marketValue!!.divide(marketValue, MC).multiply(HUNDRED).setScale(2, RoundingMode.HALF_UP)
+        // Weights over gross exposure so short positions count by their size.
+        val gross = priced.fold(BigDecimal.ZERO) { s, h -> s + h.marketValue!!.abs() }
+        val weights = if (gross.signum() == 0) emptyMap() else priced.associate {
+            it.position.symbol to it.marketValue!!.abs().divide(gross, MC).multiply(HUNDRED).setScale(2, RoundingMode.HALF_UP)
         }
         return PortfolioSummary(
-            holdings = holdings.sortedByDescending { it.marketValue ?: BigDecimal.ZERO },
+            holdings = holdings.sortedByDescending { it.marketValue?.abs() ?: it.position.costBasis.abs() },
             cash = cash(transactions),
             marketValue = marketValue.setScale(2, RoundingMode.HALF_UP),
             costBasis = cost.setScale(2, RoundingMode.HALF_UP),
             unrealizedPnl = (marketValue - cost).setScale(2, RoundingMode.HALF_UP),
+            grossCost = priced.fold(BigDecimal.ZERO) { s, h -> s + h.position.costBasis.abs() }.setScale(2, RoundingMode.HALF_UP),
             realizedPnl = positions.fold(BigDecimal.ZERO) { s, p -> s + p.realizedPnl },
             dividends = positions.fold(BigDecimal.ZERO) { s, p -> s + p.dividends },
             dayChange = priced.fold(BigDecimal.ZERO) { s, h -> s + (h.dayChange ?: BigDecimal.ZERO) }.setScale(2, RoundingMode.HALF_UP),
@@ -115,10 +143,17 @@ object PortfolioCalculator {
         )
     }
 
-    /** Same-day order: buys and splits before sells so a day trade never goes negative. */
+    /**
+     * Chronological order. With times, they decide. Without times, openings go before closings on the
+     * same day so a day trade never flips sign by accident.
+     */
     private fun sorted(txs: List<Transaction>) = txs.withIndex().sortedWith(
-        compareBy({ it.value.date }, { if (it.value.type == TxType.SELL) 1 else 0 }, { it.index }),
+        compareBy<IndexedValue<Transaction>>({ it.value.date }, { it.value.time ?: java.time.LocalTime.MIDNIGHT })
+            .thenBy { if (it.value.time != null) 0 else if (it.value.type == TxType.SELL || it.value.type == TxType.COVER) 1 else 0 }
+            .thenBy { it.index },
     ).map { it.value }
+
+    private val DUST = BigDecimal("0.000001")
 
     private fun BigDecimal.stripZeros(): BigDecimal = if (signum() == 0) BigDecimal.ZERO else stripTrailingZeros()
 }

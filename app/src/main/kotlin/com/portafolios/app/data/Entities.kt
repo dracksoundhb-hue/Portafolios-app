@@ -40,11 +40,15 @@ data class TransactionEntity(
     val brokerRef: String?,
     val fingerprint: String,
     val importId: Long?,
+    /** "HH:mm:ss" when the statement gives the time. */
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val time: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "0") val closesPosition: Boolean = false,
 ) {
     fun toModel() = Transaction(
         date = LocalDate.parse(date), type = TxType.valueOf(type), symbol = symbol, quantity = BigDecimal(quantity),
         price = BigDecimal(price), fee = BigDecimal(fee), amount = BigDecimal(amount), currency = currency,
         isin = isin, name = name, brokerRef = brokerRef,
+        time = time?.let { java.time.LocalTime.parse(it) }, closesPosition = closesPosition,
     )
 
     companion object {
@@ -52,6 +56,7 @@ data class TransactionEntity(
             portfolioId = portfolioId, date = tx.date.toString(), type = tx.type.name, symbol = tx.symbol, isin = tx.isin,
             name = tx.name, quantity = tx.quantity.toPlainString(), price = tx.price.toPlainString(), fee = tx.fee.toPlainString(),
             amount = tx.amount.toPlainString(), currency = tx.currency, brokerRef = tx.brokerRef, fingerprint = fingerprint, importId = importId,
+            time = tx.time?.toString(), closesPosition = tx.closesPosition,
         )
     }
 }

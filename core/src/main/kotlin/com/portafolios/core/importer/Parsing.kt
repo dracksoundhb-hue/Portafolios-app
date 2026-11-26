@@ -80,6 +80,21 @@ object Dates {
     }
 }
 
+object Times {
+    private val re = Regex("""\b(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?""")
+
+    /** Time of day in a date-time cell ("2024-01-15 14:30:00", "17/08/2026 1:47:47 PM UTC"). */
+    fun parse(text: String?): java.time.LocalTime? {
+        val m = re.find(text ?: return null) ?: return null
+        var h = m.groupValues[1].toInt()
+        val ampm = m.groupValues[4].uppercase()
+        if (ampm == "PM" && h < 12) h += 12
+        if (ampm == "AM" && h == 12) h = 0
+        if (h > 23) return null
+        return java.time.LocalTime.of(h, m.groupValues[2].toInt(), m.groupValues[3].ifEmpty { "0" }.toInt())
+    }
+}
+
 /** Finds columns by name, ignoring case, accents and punctuation, with several aliases per field. */
 class Columns(header: List<String>) {
     private val index: Map<String, Int> = header.mapIndexed { i, h -> norm(h) to i }

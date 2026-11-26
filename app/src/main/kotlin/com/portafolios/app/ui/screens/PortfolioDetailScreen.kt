@@ -178,7 +178,7 @@ private fun HoldingRow(h: Holding, weight: java.math.BigDecimal?) {
     Card(Modifier.fillMaxWidth()) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(p.symbol, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(if (p.isShort) "${p.symbol} · corto" else p.symbol, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 p.name?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 Text("${number(p.quantity, 4)} × ${money(p.averageCost, p.currency)} · peso ${percent(weight, signed = false)}", style = MaterialTheme.typography.bodySmall)
             }
@@ -224,7 +224,7 @@ private fun TransactionsTab(txs: List<TransactionEntity>, onDelete: (Long) -> Un
             ListItem(
                 headlineContent = { Text("${typeLabel(t.type)} ${t.symbol ?: t.isin ?: ""}") },
                 supportingContent = {
-                    val detail = if (t.type == "BUY" || t.type == "SELL") "${t.quantity} × ${t.price} ${t.currency}" else "${t.amount} ${t.currency}"
+                    val detail = if (t.type in setOf("BUY", "SELL", "SHORT", "COVER")) "${t.quantity} × ${t.price} ${t.currency}" else "${t.amount} ${t.currency}"
                     Text("${t.date} · $detail")
                 },
                 trailingContent = { IconButton(onClick = { pending = t }) { Icon(Icons.Filled.Delete, "Borrar") } },
@@ -243,6 +243,6 @@ private fun TransactionsTab(txs: List<TransactionEntity>, onDelete: (Long) -> Un
 }
 
 fun typeLabel(type: String) = when (type) {
-    "BUY" -> "Compra"; "SELL" -> "Venta"; "DIVIDEND" -> "Dividendo"; "DEPOSIT" -> "Ingreso"; "WITHDRAWAL" -> "Retirada"
+    "BUY" -> "Compra"; "SELL" -> "Venta"; "SHORT" -> "Venta en corto"; "COVER" -> "Cierre de corto"; "DIVIDEND" -> "Dividendo"; "DEPOSIT" -> "Ingreso"; "WITHDRAWAL" -> "Retirada"
     "FEE" -> "Comisión"; "TAX" -> "Impuesto"; "INTEREST" -> "Interés"; "SPLIT" -> "Split"; else -> type
 }

@@ -17,6 +17,8 @@ okhttp = "4.12.0"
 serialization = "1.9.0"
 coroutines = "1.10.2"
 junit = "4.13.2"
+pdfboxAndroid = "2.0.27.0"
+pdfbox = "2.0.32"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -42,6 +44,8 @@ androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+pdfbox-android = { module = "com.tom-roush:pdfbox-android", version.ref = "pdfboxAndroid" }
+pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
 junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]
