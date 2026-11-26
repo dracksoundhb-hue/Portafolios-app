@@ -81,7 +81,7 @@ class PortfolioDetailViewModel(private val c: AppContainer, private val id: Long
 }
 
 @Composable
-fun PortfolioDetailScreen(c: AppContainer, id: Long, onBack: () -> Unit, onImport: () -> Unit, onAlerts: () -> Unit, onPlan: () -> Unit) {
+fun PortfolioDetailScreen(c: AppContainer, id: Long, onBack: () -> Unit, onImport: () -> Unit, onAlerts: () -> Unit, onPlan: () -> Unit, onPosition: (String) -> Unit) {
     val vm: PortfolioDetailViewModel = viewModel(key = "detail-$id") { PortfolioDetailViewModel(c, id) }
     val state by vm.state.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
@@ -115,14 +115,14 @@ fun PortfolioDetailScreen(c: AppContainer, id: Long, onBack: () -> Unit, onImpor
         val s = state ?: return@Scaffold
         Column(Modifier.padding(padding)) {
             if (refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
-            SummaryHeader(s.summary, s.portfolio.baseCurrency)
+            SummaryHeader(s.summary, s.portfolio.baseCurrency, s.transactions.any { it.type == "DEPOSIT" || it.type == "WITHDRAWAL" })
             TabRow(selectedTabIndex = tab) {
                 listOf("Posiciones", "Análisis", "Operaciones").forEachIndexed { i, t ->
                     Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) })
                 }
             }
             when (tab) {
-                0 -> HoldingsTab(s.summary)
+                0 -> HoldingsTab(s.summary, onPosition)
                 1 -> AnalysisTab(s)
                 else -> TransactionsTab(s.transactions) { vm.deleteTransaction(it) }
             }
@@ -149,38 +149,40 @@ fun PortfolioDetailScreen(c: AppContainer, id: Long, onBack: () -> Unit, onImpor
 }
 
 @Composable
-private fun SummaryHeader(s: PortfolioSummary, base: String) {
+private fun SummaryHeader(s: PortfolioSummary, base: String, cashKnown: Boolean) {
     val cur = s.holdings.firstOrNull()?.position?.currency ?: base
     val neutral = MaterialTheme.colorScheme.onSurface
     val cash = s.cash.entries.filter { it.value.signum() != 0 }.joinToString(" · ") { money(it.value, it.key) }.ifEmpty { "—" }
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(money(s.marketValue, cur), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatChip("P/L latente", "${money(s.unrealizedPnl, cur)} (${percent(s.unrealizedPnlPercent)})", Modifier.weight(1.4f), pnlColor(s.unrealizedPnl, neutral))
+            StatChip("G/P no realizada", "${money(s.unrealizedPnl, cur)} (${percent(s.unrealizedPnlPercent)})", Modifier.weight(1.4f), pnlColor(s.unrealizedPnl, neutral))
             StatChip("Hoy", money(s.dayChange, cur), Modifier.weight(1f), pnlColor(s.dayChange, neutral))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatChip("Invertido", money(s.costBasis, cur), Modifier.weight(1f))
-            StatChip("P/L realizado", money(s.realizedPnl, cur), Modifier.weight(1f), pnlColor(s.realizedPnl, neutral))
+            StatChip("G/P realizada", money(s.realizedPnl, cur), Modifier.weight(1f), pnlColor(s.realizedPnl, neutral))
             StatChip("Dividendos", money(s.dividends, cur), Modifier.weight(1f))
         }
-        Text("Efectivo: $cash", style = MaterialTheme.typography.bodySmall)
+        // Some brokers (Quantfury) do not report deposits, so the cash balance cannot be known.
+        if (cashKnown) Text("Efectivo: $cash", style = MaterialTheme.typography.bodySmall)
     }
 }
 
 @Composable
-private fun HoldingsTab(s: PortfolioSummary) {
+private fun HoldingsTab(s: PortfolioSummary, onOpen: (String) -> Unit) {
     if (s.holdings.isEmpty()) { EmptyState("Sin posiciones abiertas. Importa un extracto con el botón de subir archivo."); return }
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(s.holdings, key = { it.position.symbol }) { h -> HoldingRow(h, s.weights[h.position.symbol]) }
+        items(s.holdings, key = { it.position.symbol }) { h -> HoldingRow(h, s.weights[h.position.symbol]) { onOpen(h.position.symbol) } }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HoldingRow(h: Holding, weight: java.math.BigDecimal?) {
+private fun HoldingRow(h: Holding, weight: java.math.BigDecimal?, onClick: () -> Unit) {
     val p = h.position
     val neutral = MaterialTheme.colorScheme.onSurface
-    Card(Modifier.fillMaxWidth()) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(if (p.isShort) "${p.symbol} · corto" else p.symbol, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)

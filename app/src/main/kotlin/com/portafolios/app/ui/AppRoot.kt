@@ -12,6 +12,7 @@ import com.portafolios.app.ui.screens.ImportScreen
 import com.portafolios.app.ui.screens.PortfolioDetailScreen
 import com.portafolios.app.ui.screens.PortfolioListScreen
 import com.portafolios.app.ui.screens.PlanEditorScreen
+import com.portafolios.app.ui.screens.PositionScreen
 import com.portafolios.app.ui.screens.SettingsScreen
 
 @Composable
@@ -41,10 +42,17 @@ fun AppRoot(container: AppContainer) {
                 onImport = { nav.navigate("import/$id") },
                 onAlerts = { nav.navigate("alerts") },
                 onPlan = { nav.navigate("plan/$id") },
+                onPosition = { sym -> nav.navigate("position/$id/${android.net.Uri.encode(sym)}") },
             )
         }
         composable("import/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
             ImportScreen(container, entry.arguments!!.getLong("id"), onBack = { nav.popBackStack() })
+        }
+        composable(
+            "position/{id}/{symbol}",
+            arguments = listOf(navArgument("id") { type = NavType.LongType }, navArgument("symbol") { type = NavType.StringType }),
+        ) { entry ->
+            PositionScreen(container, entry.arguments!!.getLong("id"), entry.arguments!!.getString("symbol")!!, onBack = { nav.popBackStack() })
         }
         composable("alerts") { AlertsScreen(container, onBack = { nav.popBackStack() }) }
         composable("settings") { SettingsScreen(container, onBack = { nav.popBackStack() }) }

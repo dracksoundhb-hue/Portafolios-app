@@ -82,7 +82,7 @@ private fun PortfolioCard(row: PortfolioRow, onClick: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatChip("Valor", money(s.marketValue, cur), Modifier.weight(1f))
-                StatChip("P/L", percent(s.unrealizedPnlPercent), Modifier.weight(1f), pnlColor(s.unrealizedPnl, neutral))
+                StatChip("G/P", percent(s.unrealizedPnlPercent), Modifier.weight(1f), pnlColor(s.unrealizedPnl, neutral))
                 StatChip("Hoy", money(s.dayChange, cur), Modifier.weight(1f), pnlColor(s.dayChange, neutral))
             }
         }
