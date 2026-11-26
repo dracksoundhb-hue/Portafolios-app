@@ -70,6 +70,9 @@ class PortfolioDetailViewModel(private val c: AppContainer, private val id: Long
             refreshing.value = true
             val msg = try {
                 val failed = c.market.refresh(keys)
+                // While the app is open, alerts fire right after each refresh instead of waiting for the background check.
+                val prices = c.market.quotes().first().mapValues { it.value.price }
+                com.portafolios.app.alerts.AlertChecker.check(c.app, c, prices)
                 if (failed.isEmpty()) (if (silent) null else "Precios actualizados") else "Sin precio: ${failed.keys.joinToString()}"
             } catch (e: Exception) {
                 e.message ?: "No se pudieron actualizar los precios"

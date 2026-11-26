@@ -70,6 +70,7 @@ fun PositionScreen(c: AppContainer, portfolioId: Long, symbol: String, onBack: (
     val vm: PositionViewModel = viewModel(key = "pos-$portfolioId-$symbol") { PositionViewModel(c, portfolioId, symbol) }
     val s by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val permission = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
     var editing by remember { mutableStateOf<Boolean?>(null) } // true = take profit, false = stop loss
 
     Scaffold(topBar = { BackTopBar(s?.profile?.name ?: symbol, onBack) }) { padding ->
@@ -197,6 +198,9 @@ fun PositionScreen(c: AppContainer, portfolioId: Long, symbol: String, onBack: (
                     TextButton(enabled = price != null && price.signum() > 0, onClick = {
                         vm.addAlert(above, price!!)
                         PriceAlertWorker.schedule(context)
+                        if (android.os.Build.VERSION.SDK_INT >= 33 && !com.portafolios.app.alerts.AlertChecker.canNotify(context)) {
+                            permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        }
                         editing = null
                     }) { Text("Guardar") }
                 },

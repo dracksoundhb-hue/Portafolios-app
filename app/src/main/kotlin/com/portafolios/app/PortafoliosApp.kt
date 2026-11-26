@@ -18,11 +18,12 @@ class PortafoliosApp : Application() {
         com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(applicationContext)
         container = AppContainer(this)
         PriceAlertWorker.createChannel(this)
+        PriceAlertWorker.schedule(this)
     }
 }
 
 /** Manual dependency container: small app, no DI framework needed. */
-class AppContainer(app: Application) {
+class AppContainer(val app: Application) {
     val secrets = SecretStore(app)
     val settings = Settings(app)
     val db: AppDatabase by lazy { AppDatabase.open(app, secrets.databasePassphrase()) }

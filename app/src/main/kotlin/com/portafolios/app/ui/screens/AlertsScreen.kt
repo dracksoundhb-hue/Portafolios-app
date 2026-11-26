@@ -56,11 +56,12 @@ fun AlertsScreen(c: AppContainer, onBack: () -> Unit) {
         topBar = { BackTopBar("Alertas de precio", onBack) },
         floatingActionButton = { FloatingActionButton(onClick = { adding = true }) { Icon(Icons.Filled.Add, "Nueva alerta") } },
     ) { padding ->
-        LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(16.dp)) {
+        LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item { NotificationStatus() }
             if (!vm.hasKey) item {
-                Card { Text("Añade tu clave de Finnhub en Ajustes para que las alertas puedan consultar precios.", Modifier.padding(12.dp)) }
+                Card { Text("Añade tu clave de Finnhub en Ajustes para las alertas de acciones. Las de cripto funcionan sin clave.", Modifier.padding(12.dp)) }
             }
-            if (alerts.isEmpty()) item { EmptyState("Sin alertas. Se comprueban cada 30 minutos aproximadamente.") }
+            if (alerts.isEmpty()) item { EmptyState("Sin alertas. Créalas también desde la ficha de cada posición (take profit y stop loss).") }
             items(alerts, key = { it.id }) { a ->
                 ListItem(
                     headlineContent = { Text("${a.symbol} ${if (a.condition == "ABOVE") "≥" else "≤"} ${a.target}") },
@@ -103,3 +104,52 @@ fun AlertsScreen(c: AppContainer, onBack: () -> Unit) {
         )
     }
 }
+
+/** Shows whether notifications are allowed, with a way to fix it and a test notification. */
+@Composable
+fun NotificationStatus() {
+    val context = LocalContext.current
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var allowed by remember { mutableStateOf(com.portafolios.app.alerts.AlertChecker.canNotify(context)) }
+    // Re-check when coming back from the system settings.
+    DisposableEffect(lifecycle) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) allowed = com.portafolios.app.alerts.AlertChecker.canNotify(context)
+        }
+        lifecycle.lifecycle.addObserver(obs)
+        onDispose { lifecycle.lifecycle.removeObserver(obs) }
+    }
+    val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed = com.portafolios.app.alerts.AlertChecker.canNotify(context) }
+    Card(colors = if (allowed) CardDefaults.cardColors() else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (allowed) {
+                Text("Notificaciones activadas.")
+                Text(
+                    "Con la app abierta, las alertas se comprueban cada minuto. Con la app cerrada, Android las revisa cada 15 minutos aproximadamente (algo más si el ahorro de batería está activo).",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(onClick = { com.portafolios.app.alerts.AlertChecker.notify(context, 9999, "Prueba de Portafolios", "Las alertas de precio te llegarán así.") }) {
+                    Text("Enviar notificación de prueba")
+                }
+            } else {
+                Text("Las notificaciones están desactivadas, por eso no te llegan las alertas.")
+                Button(onClick = {
+                    if (Build.VERSION.SDK_INT >= 33 && !askedBefore(context)) {
+                        markAsked(context); request.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        context.startActivity(
+                            android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName),
+                        )
+                    }
+                }) { Text("Activar notificaciones") }
+            }
+        }
+    }
+}
+
+private fun askedBefore(context: android.content.Context) =
+    context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getBoolean("asked_notifications", false)
+
+private fun markAsked(context: android.content.Context) =
+    context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).edit().putBoolean("asked_notifications", true).apply()
