@@ -11,6 +11,7 @@ import com.portafolios.app.ui.screens.AlertsScreen
 import com.portafolios.app.ui.screens.ImportScreen
 import com.portafolios.app.ui.screens.PortfolioDetailScreen
 import com.portafolios.app.ui.screens.PortfolioListScreen
+import com.portafolios.app.ui.screens.PlanEditorScreen
 import com.portafolios.app.ui.screens.SettingsScreen
 
 @Composable
@@ -23,7 +24,14 @@ fun AppRoot(container: AppContainer) {
                 onOpen = { nav.navigate("portfolio/$it") },
                 onSettings = { nav.navigate("settings") },
                 onAlerts = { nav.navigate("alerts") },
+                onCreate = { nav.navigate("create") },
             )
+        }
+        composable("create") {
+            PlanEditorScreen(container, null, onDone = { id -> nav.navigate("portfolio/$id") { popUpTo("portfolios") } }, onBack = { nav.popBackStack() })
+        }
+        composable("plan/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+            PlanEditorScreen(container, entry.arguments!!.getLong("id"), onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
         }
         composable("portfolio/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
             val id = entry.arguments!!.getLong("id")
@@ -32,6 +40,7 @@ fun AppRoot(container: AppContainer) {
                 onBack = { nav.popBackStack() },
                 onImport = { nav.navigate("import/$id") },
                 onAlerts = { nav.navigate("alerts") },
+                onPlan = { nav.navigate("plan/$id") },
             )
         }
         composable("import/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->

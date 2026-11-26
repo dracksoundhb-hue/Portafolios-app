@@ -10,7 +10,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 @Database(
     entities = [PortfolioEntity::class, TransactionEntity::class, ImportEntity::class, QuoteEntity::class, ProfileEntity::class, AlertEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -21,6 +21,17 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun alerts(): AlertDao
 
     companion object {
+        /** v3: risk profile and target allocation per portfolio. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE portfolios ADD COLUMN riskProfile TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE portfolios ADD COLUMN targets TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE portfolios ADD COLUMN maxPositionPct REAL DEFAULT NULL")
+                db.execSQL("ALTER TABLE portfolios ADD COLUMN rebalanceBandPct REAL DEFAULT NULL")
+                db.execSQL("ALTER TABLE portfolios ADD COLUMN horizonYears INTEGER DEFAULT NULL")
+            }
+        }
+
         /** v2: time of day and "closes position" flag (needed for brokers like Quantfury). */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -34,7 +45,7 @@ abstract class AppDatabase : RoomDatabase() {
             System.loadLibrary("sqlcipher")
             return Room.databaseBuilder(context, AppDatabase::class.java, "portafolios.db")
                 .openHelperFactory(SupportOpenHelperFactory(passphrase))
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
         }
     }

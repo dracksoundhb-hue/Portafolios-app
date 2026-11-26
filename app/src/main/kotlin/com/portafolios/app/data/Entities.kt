@@ -5,6 +5,9 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.portafolios.core.model.Transaction
+import com.portafolios.core.risk.AssetClass
+import com.portafolios.core.risk.PortfolioPlan
+import com.portafolios.core.risk.RiskProfile
 import com.portafolios.core.model.TxType
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -16,7 +19,32 @@ data class PortfolioEntity(
     val broker: String,
     val baseCurrency: String = "EUR",
     val createdAt: Long = System.currentTimeMillis(),
-)
+    /** RiskProfile name, or null for portfolios created before risk profiles existed. */
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val riskProfile: String? = null,
+    /** Target allocation, "EQUITY=48;BONDS=31;...". */
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val targets: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val maxPositionPct: Double? = null,
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val rebalanceBandPct: Double? = null,
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val horizonYears: Int? = null,
+) {
+    fun plan(): PortfolioPlan? {
+        val profile = riskProfile?.let { runCatching { RiskProfile.valueOf(it) }.getOrNull() } ?: return null
+        val t = targets?.split(';')?.mapNotNull { part ->
+            val (k, v) = part.split('=').takeIf { it.size == 2 } ?: return@mapNotNull null
+            runCatching { AssetClass.valueOf(k) to v.toDouble() }.getOrNull()
+        }?.toMap() ?: profile.targets.mapValues { it.value.toDouble() }
+        return PortfolioPlan(
+            profile, t, maxPositionPct ?: profile.maxPositionPct.toDouble(),
+            rebalanceBandPct ?: profile.rebalanceBandPct.toDouble(), horizonYears ?: profile.horizonYears,
+        )
+    }
+
+    fun withPlan(plan: PortfolioPlan) = copy(
+        riskProfile = plan.profile.name,
+        targets = plan.targets.entries.joinToString(";") { "${it.key.name}=${it.value}" },
+        maxPositionPct = plan.maxPositionPct, rebalanceBandPct = plan.rebalanceBandPct, horizonYears = plan.horizonYears,
+    )
+}
 
 /** Amounts are stored as decimal strings so no precision is lost. */
 @Entity(

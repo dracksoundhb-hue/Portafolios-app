@@ -37,6 +37,8 @@ data class DetailState(
     val sectors: List<Slice>,
     val countries: List<Slice>,
     val insights: List<Insight>,
+    val plan: com.portafolios.core.risk.PortfolioPlan?,
+    val classes: Map<com.portafolios.core.risk.AssetClass, Double>,
 )
 
 class PortfolioDetailViewModel(private val c: AppContainer, private val id: Long) : ViewModel() {
@@ -49,7 +51,9 @@ class PortfolioDetailViewModel(private val c: AppContainer, private val id: Long
             p, summary, txs,
             PortfolioAnalyzer.allocation(summary, profiles) { it?.sector },
             PortfolioAnalyzer.allocation(summary, profiles) { it?.country },
-            PortfolioAnalyzer.insights(summary, profiles),
+            PortfolioAnalyzer.insights(summary, profiles, p.plan()),
+            p.plan(),
+            PortfolioAnalyzer.classAllocation(summary, profiles),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -77,7 +81,7 @@ class PortfolioDetailViewModel(private val c: AppContainer, private val id: Long
 }
 
 @Composable
-fun PortfolioDetailScreen(c: AppContainer, id: Long, onBack: () -> Unit, onImport: () -> Unit, onAlerts: () -> Unit) {
+fun PortfolioDetailScreen(c: AppContainer, id: Long, onBack: () -> Unit, onImport: () -> Unit, onAlerts: () -> Unit, onPlan: () -> Unit) {
     val vm: PortfolioDetailViewModel = viewModel(key = "detail-$id") { PortfolioDetailViewModel(c, id) }
     val state by vm.state.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
@@ -98,6 +102,7 @@ fun PortfolioDetailScreen(c: AppContainer, id: Long, onBack: () -> Unit, onImpor
                 Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Más") }
                     DropdownMenu(menu, { menu = false }) {
+                        DropdownMenuItem(text = { Text("Perfil de riesgo") }, onClick = { menu = false; onPlan() })
                         DropdownMenuItem(text = { Text("Alertas de precio") }, onClick = { menu = false; onAlerts() })
                         DropdownMenuItem(text = { Text("Renombrar") }, onClick = { menu = false; renaming = true })
                         DropdownMenuItem(text = { Text("Eliminar portafolio") }, onClick = { menu = false; confirmDelete = true })
@@ -194,6 +199,7 @@ private fun HoldingRow(h: Holding, weight: java.math.BigDecimal?) {
 @Composable
 private fun AnalysisTab(s: DetailState) {
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        s.plan?.let { plan -> item { PlanVsActual(plan, s.classes) } }
         item { Text("Qué revisar", style = MaterialTheme.typography.titleMedium) }
         if (s.insights.isEmpty()) item { Text("Nada destacable. Actualiza precios para un análisis completo.", style = MaterialTheme.typography.bodySmall) }
         items(s.insights) { i ->
@@ -245,4 +251,30 @@ private fun TransactionsTab(txs: List<TransactionEntity>, onDelete: (Long) -> Un
 fun typeLabel(type: String) = when (type) {
     "BUY" -> "Compra"; "SELL" -> "Venta"; "SHORT" -> "Venta en corto"; "COVER" -> "Cierre de corto"; "DIVIDEND" -> "Dividendo"; "DEPOSIT" -> "Ingreso"; "WITHDRAWAL" -> "Retirada"
     "FEE" -> "Comisión"; "TAX" -> "Impuesto"; "INTEREST" -> "Interés"; "SPLIT" -> "Split"; else -> type
+}
+
+@Composable
+private fun PlanVsActual(plan: com.portafolios.core.risk.PortfolioPlan, actual: Map<com.portafolios.core.risk.AssetClass, Double>) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Tu plan (${plan.profile.label}) frente a la cartera real", style = MaterialTheme.typography.titleSmall)
+            com.portafolios.core.risk.AssetClass.entries.forEach { cls ->
+                val target = plan.targets[cls] ?: 0.0
+                val now = actual[cls] ?: 0.0
+                val off = kotlin.math.abs(now - target) > plan.rebalanceBandPct
+                Column {
+                    Row(Modifier.fillMaxWidth()) {
+                        Text(cls.label, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "%.1f %% / %.0f %%".format(now, target), style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold, color = if (off) com.portafolios.app.ui.theme.LossColor else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    LinearProgressIndicator(progress = { (now / 100).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                }
+            }
+            if (actual.isEmpty()) Text("Actualiza precios para comparar.", style = MaterialTheme.typography.bodySmall)
+            else Text("Real / objetivo. En rojo, fuera de tu margen de ±${plan.rebalanceBandPct.toInt()} puntos.", style = MaterialTheme.typography.labelSmall)
+        }
+    }
 }

@@ -35,17 +35,13 @@ class PortfolioListViewModel(private val c: AppContainer) : ViewModel() {
         ps.map { PortfolioRow(it, PortfolioCalculator.summary(txs[it.id].orEmpty(), quotes)) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    fun create(name: String, broker: Broker, currency: String) = viewModelScope.launch {
-        c.portfolios.createPortfolio(name, broker, currency)
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PortfolioListScreen(c: AppContainer, onOpen: (Long) -> Unit, onSettings: () -> Unit, onAlerts: () -> Unit) {
+fun PortfolioListScreen(c: AppContainer, onOpen: (Long) -> Unit, onSettings: () -> Unit, onAlerts: () -> Unit, onCreate: () -> Unit) {
     val vm: PortfolioListViewModel = viewModel { PortfolioListViewModel(c) }
     val rows by vm.rows.collectAsStateWithLifecycle()
-    var showCreate by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -58,7 +54,7 @@ fun PortfolioListScreen(c: AppContainer, onOpen: (Long) -> Unit, onSettings: () 
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = { showCreate = true }, icon = { Icon(Icons.Filled.Add, null) }, text = { Text("Nuevo portafolio") })
+            ExtendedFloatingActionButton(onClick = onCreate, icon = { Icon(Icons.Filled.Add, null) }, text = { Text("Nuevo portafolio") })
         },
     ) { padding ->
         val list = rows
@@ -71,9 +67,6 @@ fun PortfolioListScreen(c: AppContainer, onOpen: (Long) -> Unit, onSettings: () 
         }
     }
 
-    if (showCreate) CreatePortfolioDialog(onDismiss = { showCreate = false }) { name, broker, cur ->
-        vm.create(name, broker, cur); showCreate = false
-    }
 }
 
 @Composable
@@ -84,7 +77,8 @@ private fun PortfolioCard(row: PortfolioRow, onClick: () -> Unit) {
     Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(16.dp)) {
             Text(row.portfolio.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(runCatching { Broker.valueOf(row.portfolio.broker).displayName }.getOrDefault(row.portfolio.broker), style = MaterialTheme.typography.bodySmall)
+            val risk = row.portfolio.plan()?.profile?.label
+            Text(listOfNotNull(runCatching { Broker.valueOf(row.portfolio.broker).displayName }.getOrDefault(row.portfolio.broker), risk).joinToString(" · "), style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatChip("Valor", money(s.marketValue, cur), Modifier.weight(1f))
@@ -93,26 +87,6 @@ private fun PortfolioCard(row: PortfolioRow, onClick: () -> Unit) {
             }
         }
     }
-}
-
-@Composable
-fun CreatePortfolioDialog(onDismiss: () -> Unit, onCreate: (String, Broker, String) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var broker by remember { mutableStateOf(Broker.INTERACTIVE_BROKERS) }
-    var currency by remember { mutableStateOf("EUR") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Nuevo portafolio") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(name, { name = it.take(60) }, label = { Text("Nombre") }, singleLine = true)
-                BrokerPicker(broker) { broker = it }
-                OptionPicker("Divisa base", currency, listOf("EUR", "USD", "GBP", "CHF", "MXN")) { currency = it }
-            }
-        },
-        confirmButton = { TextButton(onClick = { onCreate(name, broker, currency) }, enabled = name.isNotBlank()) { Text("Crear") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
-    )
 }
 
 @Composable

@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.portafolios.core.importer.ImportPreview
 import com.portafolios.core.model.Broker
 import com.portafolios.core.model.Transaction
+import com.portafolios.core.risk.PortfolioPlan
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -19,8 +20,10 @@ class PortfolioRepository(private val db: AppDatabase) {
 
     fun imports(portfolioId: Long): Flow<List<ImportEntity>> = db.imports().observeFor(portfolioId)
 
-    suspend fun createPortfolio(name: String, broker: Broker, currency: String): Long =
-        db.portfolios().insert(PortfolioEntity(name = name.trim(), broker = broker.name, baseCurrency = currency))
+    suspend fun createPortfolio(name: String, broker: Broker, currency: String, plan: PortfolioPlan?): Long {
+        val base = PortfolioEntity(name = name.trim(), broker = broker.name, baseCurrency = currency)
+        return db.portfolios().insert(if (plan != null) base.withPlan(plan) else base)
+    }
 
     suspend fun updatePortfolio(p: PortfolioEntity) = db.portfolios().update(p)
 
