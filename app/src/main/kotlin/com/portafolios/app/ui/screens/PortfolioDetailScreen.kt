@@ -60,17 +60,23 @@ class PortfolioDetailViewModel(private val c: AppContainer, private val id: Long
     val refreshing = MutableStateFlow(false)
     val message = MutableStateFlow<String?>(null)
 
-    fun refreshPrices() {
+    private var lastSilentMessage: String? = null
+
+    /** [silent]: automatic refresh, only speaks up on errors. */
+    fun refreshPrices(silent: Boolean = false) {
         val keys = state.value?.summary?.holdings?.map { it.position.symbol } ?: return
-        if (refreshing.value) return
+        if (refreshing.value || keys.isEmpty()) return
         viewModelScope.launch {
             refreshing.value = true
-            message.value = try {
+            val msg = try {
                 val failed = c.market.refresh(keys)
-                if (failed.isEmpty()) "Precios actualizados" else "Sin precio: ${failed.keys.joinToString()}"
+                if (failed.isEmpty()) (if (silent) null else "Precios actualizados") else "Sin precio: ${failed.keys.joinToString()}"
             } catch (e: Exception) {
                 e.message ?: "No se pudieron actualizar los precios"
             }
+            // Automatic refreshes repeat every minute: do not repeat the same warning each time.
+            if (msg != null && !(silent && msg == lastSilentMessage)) message.value = msg
+            if (silent) lastSilentMessage = msg
             refreshing.value = false
         }
     }
@@ -93,11 +99,20 @@ fun PortfolioDetailScreen(c: AppContainer, id: Long, onBack: () -> Unit, onImpor
     val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); vm.message.value = null } }
+    // Refresh when the portfolio opens and every minute while it stays on screen.
+    val hasState = state != null
+    LaunchedEffect(hasState) {
+        if (!hasState) return@LaunchedEffect
+        while (true) {
+            vm.refreshPrices(silent = true)
+            kotlinx.coroutines.delay(60_000)
+        }
+    }
 
     Scaffold(
         topBar = {
             BackTopBar(state?.portfolio?.name ?: "", onBack) {
-                IconButton(onClick = vm::refreshPrices, enabled = !refreshing) { Icon(Icons.Filled.Refresh, "Actualizar precios") }
+                IconButton(onClick = { vm.refreshPrices() }, enabled = !refreshing) { Icon(Icons.Filled.Refresh, "Actualizar precios") }
                 IconButton(onClick = onImport) { Icon(Icons.Filled.UploadFile, "Importar extracto") }
                 Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Más") }
@@ -163,6 +178,9 @@ private fun SummaryHeader(s: PortfolioSummary, base: String, cashKnown: Boolean)
             StatChip("Invertido", money(s.costBasis, cur), Modifier.weight(1f))
             StatChip("G/P realizada", money(s.realizedPnl, cur), Modifier.weight(1f), pnlColor(s.realizedPnl, neutral))
             StatChip("Dividendos", money(s.dividends, cur), Modifier.weight(1f))
+        }
+        s.holdings.mapNotNull { it.quote?.timeMillis }.maxOrNull()?.let { t ->
+            Text("Último precio: ${priceTime(t)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         // Some brokers (Quantfury) do not report deposits, so the cash balance cannot be known.
         if (cashKnown) Text("Efectivo: $cash", style = MaterialTheme.typography.bodySmall)
@@ -279,4 +297,13 @@ private fun PlanVsActual(plan: com.portafolios.core.risk.PortfolioPlan, actual: 
             else Text("Real / objetivo. En rojo, fuera de tu margen de ±${plan.rebalanceBandPct.toInt()} puntos.", style = MaterialTheme.typography.labelSmall)
         }
     }
+}
+
+/** "17:42" today, "25/11 22:00" otherwise. */
+fun priceTime(millis: Long): String {
+    val zone = java.time.ZoneId.systemDefault()
+    val t = java.time.Instant.ofEpochMilli(millis).atZone(zone)
+    val today = java.time.LocalDate.now(zone)
+    val f = if (t.toLocalDate() == today) "HH:mm" else "dd/MM HH:mm"
+    return t.format(java.time.format.DateTimeFormatter.ofPattern(f))
 }

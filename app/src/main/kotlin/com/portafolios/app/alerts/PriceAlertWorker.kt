@@ -24,7 +24,6 @@ import java.util.concurrent.TimeUnit
 class PriceAlertWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val container = (applicationContext as PortafoliosApp).container
-        if (!container.market.hasApiKey) return Result.success()
         val alerts = container.db.alerts().active()
         if (alerts.isEmpty()) return Result.success()
         for ((symbol, group) in alerts.groupBy { it.symbol }) {

@@ -21,7 +21,7 @@ class FinnhubClient(private val apiKey: () -> String?) {
         .build()
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
-    @Serializable data class QuoteDto(val c: Double? = null, val d: Double? = null, val dp: Double? = null)
+    @Serializable data class QuoteDto(val c: Double? = null, val d: Double? = null, val dp: Double? = null, val t: Long? = null)
     @Serializable data class ProfileDto(val name: String? = null, val finnhubIndustry: String? = null, val country: String? = null, val ticker: String? = null)
     @Serializable data class SearchDto(val result: List<SearchItem> = emptyList())
     @Serializable data class SearchItem(val symbol: String = "", val description: String? = null, val type: String? = null)

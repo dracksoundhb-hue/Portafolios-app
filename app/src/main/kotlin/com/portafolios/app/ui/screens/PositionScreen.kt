@@ -70,7 +70,7 @@ fun PositionScreen(c: AppContainer, portfolioId: Long, symbol: String, onBack: (
     val vm: PositionViewModel = viewModel(key = "pos-$portfolioId-$symbol") { PositionViewModel(c, portfolioId, symbol) }
     val s by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var editing by remember { mutableStateOf<Boolean?>(null) } // true = objetivo, false = stop
+    var editing by remember { mutableStateOf<Boolean?>(null) } // true = take profit, false = stop loss
 
     Scaffold(topBar = { BackTopBar(s?.profile?.name ?: symbol, onBack) }) { padding ->
         val st = s ?: return@Scaffold
@@ -87,6 +87,13 @@ fun PositionScreen(c: AppContainer, portfolioId: Long, symbol: String, onBack: (
                         if (st.quote == null) "Sin precio. Pulsa actualizar en el portafolio." else "${money(st.quote.change, cur)} (${percent(st.quote.changePercent)}) hoy",
                         color = pnlColor(st.quote?.change, MaterialTheme.colorScheme.onSurfaceVariant), textAlign = TextAlign.Center,
                     )
+                    st.quote?.timeMillis?.let { t ->
+                        val stale = System.currentTimeMillis() - t > 30 * 60_000
+                        Text(
+                            "Precio de las ${priceTime(t)}" + if (stale) " · mercado cerrado" else "",
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
             if (p == null) item { EmptyState("Sin operaciones de este valor.") }
@@ -122,8 +129,8 @@ fun PositionScreen(c: AppContainer, portfolioId: Long, symbol: String, onBack: (
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row {
-                            TextButton(onClick = { editing = false }, Modifier.weight(1f)) { Text("+ Stop") }
-                            TextButton(onClick = { editing = true }, Modifier.weight(1f)) { Text("+ Objetivo") }
+                            TextButton(onClick = { editing = false }, Modifier.weight(1f)) { Text("+ Stop loss") }
+                            TextButton(onClick = { editing = true }, Modifier.weight(1f)) { Text("+ Take profit") }
                         }
                         val targetAbove = !p.isShort
                         st.alerts.filter { it.active }.forEach { a ->
@@ -132,7 +139,7 @@ fun PositionScreen(c: AppContainer, portfolioId: Long, symbol: String, onBack: (
                             val pnl = estimate(p, price)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text("${if (isTarget) "Objetivo" else "Stop"} a ${money(price, cur)}", fontWeight = FontWeight.SemiBold)
+                                    Text("${if (isTarget) "Take profit" else "Stop loss"} a ${money(price, cur)}", fontWeight = FontWeight.SemiBold)
                                     Text(
                                         "${if (pnl.signum() >= 0) "Ganancia" else "Pérdida"} aprox. ${money(pnl, cur)}",
                                         style = MaterialTheme.typography.bodySmall, color = pnlColor(pnl, neutral),
@@ -172,7 +179,7 @@ fun PositionScreen(c: AppContainer, portfolioId: Long, symbol: String, onBack: (
             val above = isTarget != pos.isShort
             AlertDialog(
                 onDismissRequest = { editing = null },
-                title = { Text(if (isTarget) "Precio objetivo" else "Precio de stop") },
+                title = { Text(if (isTarget) "Take profit" else "Stop loss") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(

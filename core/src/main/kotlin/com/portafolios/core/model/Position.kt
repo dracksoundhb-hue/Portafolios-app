@@ -18,6 +18,10 @@ data class Position(
     val isShort: Boolean get() = quantity.signum() < 0
 }
 
-data class Quote(val symbol: String, val price: BigDecimal, val change: BigDecimal, val changePercent: BigDecimal)
+data class Quote(
+    val symbol: String, val price: BigDecimal, val change: BigDecimal, val changePercent: BigDecimal,
+    /** When this price was traded or published, epoch millis. */
+    val timeMillis: Long? = null,
+)
 
 data class SecurityProfile(val symbol: String, val name: String?, val sector: String?, val country: String?)
