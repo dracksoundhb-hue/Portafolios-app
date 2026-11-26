@@ -7,14 +7,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -28,3 +28,14 @@ jobs:
           name: portafolios-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
+      - name: Publicar APK para descargar desde el móvil
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk Portafolios.apk
+          gh release delete ultima-version --yes --cleanup-tag || true
+          gh release create ultima-version Portafolios.apk \
+            --title "Portafolios (versión de prueba #${{ github.run_number }})" \
+            --notes "APK de prueba compilado desde ${GITHUB_SHA::7}. Descárgalo desde el móvil e instálalo." \
+            --target "$GITHUB_SHA" --latest

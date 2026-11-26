@@ -7,3 +7,6 @@ local.properties
 *.keystore
 *.jks
 keystore.properties
+
+# Debug-only signing key, shared so test builds install over each other. Not used for Google Play.
+!app/debug.keystore

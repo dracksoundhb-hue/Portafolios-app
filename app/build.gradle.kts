@@ -23,6 +23,13 @@ android {
     // Release signing comes from environment variables (GitHub Actions secrets), never from the repo.
     val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
     signingConfigs {
+        // Fixed debug key so each test APK installs as an update over the previous one.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (keystorePath != null) {
             create("release") {
                 storeFile = file(keystorePath)
