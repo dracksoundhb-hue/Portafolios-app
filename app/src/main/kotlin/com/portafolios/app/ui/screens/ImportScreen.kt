@@ -43,6 +43,21 @@ class ImportViewModel(private val c: AppContainer, private val portfolioId: Long
     val result = MutableStateFlow<String?>(null)
     private var fileBytes: ByteArray? = null
 
+    /** Instruments the user unticked ("" = movements without a symbol: deposits, fees...). */
+    val excluded = MutableStateFlow<Set<String>>(emptySet())
+    /** Only import operations on or after this date. */
+    val fromDate = MutableStateFlow<java.time.LocalDate?>(null)
+
+    /** The preview after the user's filters; this is what gets saved. */
+    val filtered: StateFlow<ImportPreview?> = combine(preview, excluded, fromDate) { p, ex, from ->
+        p?.copy(rows = p.rows.filter { r ->
+            (r.transaction.instrumentKey ?: "") !in ex && (from == null || !r.transaction.date.isBefore(from))
+        })
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun toggle(key: String) { excluded.value = if (key in excluded.value) excluded.value - key else excluded.value + key }
+    fun selectOnly(keys: Set<String>) { excluded.value = (preview.value?.rows?.map { it.transaction.instrumentKey ?: "" }?.toSet() ?: emptySet()) - keys }
+
     fun currentBroker(): Broker = broker.value
         ?: portfolio.value?.broker?.let { runCatching { Broker.valueOf(it) }.getOrNull() } ?: Broker.OTHER
 
@@ -55,6 +70,7 @@ class ImportViewModel(private val c: AppContainer, private val portfolioId: Long
             val (name, bytes) = withContext(Dispatchers.IO) { readUri(context, uri) }
             fileName.value = name
             fileBytes = bytes
+            excluded.value = emptySet(); fromDate.value = null
             reparseNow()
         } catch (e: Exception) {
             result.value = e.message ?: "No se pudo leer el archivo"
@@ -74,7 +90,7 @@ class ImportViewModel(private val c: AppContainer, private val portfolioId: Long
     }
 
     fun confirm() = viewModelScope.launch {
-        val p = preview.value ?: return@launch
+        val p = filtered.value ?: return@launch
         busy.value = true
         val added = c.portfolios.saveImport(portfolioId, fileName.value ?: "archivo", p)
         result.value = "Importadas $added operaciones nuevas" + if (p.duplicateCount > 0) " (${p.duplicateCount} ya estaban)" else ""
@@ -117,7 +133,10 @@ fun ImportScreen(c: AppContainer, portfolioId: Long, onBack: () -> Unit) {
     val vm: ImportViewModel = viewModel(key = "import-$portfolioId") { ImportViewModel(c, portfolioId) }
     val portfolio by vm.portfolio.collectAsStateWithLifecycle()
     val brokerSel by vm.broker.collectAsStateWithLifecycle()
-    val preview by vm.preview.collectAsStateWithLifecycle()
+    val preview by vm.filtered.collectAsStateWithLifecycle()
+    val fullPreview by vm.preview.collectAsStateWithLifecycle()
+    val excluded by vm.excluded.collectAsStateWithLifecycle()
+    val fromDate by vm.fromDate.collectAsStateWithLifecycle()
     val fileName by vm.fileName.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val result by vm.result.collectAsStateWithLifecycle()
@@ -149,6 +168,9 @@ fun ImportScreen(c: AppContainer, portfolioId: Long, onBack: () -> Unit) {
             }
             if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             result?.let { item { Card { Text(it, Modifier.padding(12.dp)) } } }
+            fullPreview?.takeIf { it.error == null && it.rows.isNotEmpty() }?.let { full ->
+                item { ImportFilters(full, excluded, fromDate, vm::toggle, vm::selectOnly) { vm.fromDate.value = it } }
+            }
             preview?.let { p -> previewItems(p, fileName.orEmpty(), onConfirm = { vm.confirm() }, onUseBroker = { vm.selectBroker(it) }) }
             if (history.isNotEmpty()) {
                 item { Text("Importaciones anteriores", style = MaterialTheme.typography.titleMedium) }
@@ -215,4 +237,45 @@ private fun HistoryRow(h: ImportEntity, onUndo: () -> Unit) {
         confirmButton = { TextButton(onClick = { confirm = false; onUndo() }) { Text("Deshacer") } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancelar") } },
     )
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun ImportFilters(
+    full: ImportPreview, excluded: Set<String>, fromDate: java.time.LocalDate?,
+    onToggle: (String) -> Unit, onOnly: (Set<String>) -> Unit, onFrom: (java.time.LocalDate?) -> Unit,
+) {
+    val counts = full.rows.groupingBy { it.transaction.instrumentKey ?: "" }.eachCount().toSortedMap(compareBy<String> { it.isEmpty() }.thenBy { it })
+    val today = java.time.LocalDate.now()
+    var dateText by remember { mutableStateOf("") }
+    Card {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("¿Qué quieres importar a este portafolio?", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { onOnly(counts.keys) }) { Text("Todos") }
+                TextButton(onClick = { onOnly(emptySet()) }) { Text("Ninguno") }
+            }
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                counts.forEach { (key, n) ->
+                    FilterChip(
+                        selected = key !in excluded, onClick = { onToggle(key) },
+                        label = { Text(if (key.isEmpty()) "Ingresos, comisiones… ($n)" else "$key ($n)") },
+                    )
+                }
+            }
+            Text("Desde", style = MaterialTheme.typography.titleSmall)
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(selected = fromDate == null, onClick = { onFrom(null); dateText = "" }, label = { Text("Todo el historial") })
+                FilterChip(selected = fromDate == today, onClick = { onFrom(today) }, label = { Text("Hoy") })
+                FilterChip(selected = fromDate == today.minusDays(7), onClick = { onFrom(today.minusDays(7)) }, label = { Text("Últimos 7 días") })
+                FilterChip(selected = fromDate == today.minusDays(30), onClick = { onFrom(today.minusDays(30)) }, label = { Text("Últimos 30 días") })
+            }
+            OutlinedTextField(
+                dateText,
+                { dateText = it.take(10); com.portafolios.core.importer.Dates.parse(dateText)?.let(onFrom) },
+                label = { Text("Otra fecha (dd/mm/aaaa)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+            )
+            fromDate?.let { Text("Solo operaciones desde el ${it.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))}", style = MaterialTheme.typography.bodySmall) }
+        }
+    }
 }
