@@ -13,6 +13,8 @@ import com.portafolios.app.ui.screens.PortfolioDetailScreen
 import com.portafolios.app.ui.screens.PortfolioListScreen
 import com.portafolios.app.ui.screens.PlanEditorScreen
 import com.portafolios.app.ui.screens.PositionScreen
+import com.portafolios.app.ui.screens.SearchScreen
+import com.portafolios.app.ui.screens.AssetScreen
 import com.portafolios.app.ui.screens.SettingsScreen
 
 @Composable
@@ -26,6 +28,7 @@ fun AppRoot(container: AppContainer) {
                 onSettings = { nav.navigate("settings") },
                 onAlerts = { nav.navigate("alerts") },
                 onCreate = { nav.navigate("create") },
+                onSearch = { nav.navigate("search") },
             )
         }
         composable("create") {
@@ -53,6 +56,17 @@ fun AppRoot(container: AppContainer) {
             arguments = listOf(navArgument("id") { type = NavType.LongType }, navArgument("symbol") { type = NavType.StringType }),
         ) { entry ->
             PositionScreen(container, entry.arguments!!.getLong("id"), entry.arguments!!.getString("symbol")!!, onBack = { nav.popBackStack() })
+        }
+        composable("search") {
+            SearchScreen(container, onBack = { nav.popBackStack() }) { sym, name ->
+                nav.navigate("asset/${android.net.Uri.encode(sym)}?name=${android.net.Uri.encode(name)}")
+            }
+        }
+        composable(
+            "asset/{symbol}?name={name}",
+            arguments = listOf(navArgument("symbol") { type = NavType.StringType }, navArgument("name") { type = NavType.StringType; defaultValue = "" }),
+        ) { entry ->
+            AssetScreen(container, entry.arguments!!.getString("symbol")!!, entry.arguments!!.getString("name").orEmpty(), onBack = { nav.popBackStack() })
         }
         composable("alerts") { AlertsScreen(container, onBack = { nav.popBackStack() }) }
         composable("settings") { SettingsScreen(container, onBack = { nav.popBackStack() }) }

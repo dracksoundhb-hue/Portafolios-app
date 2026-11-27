@@ -103,3 +103,15 @@ interface AlertDao {
     @Query("DELETE FROM alerts WHERE id = :id")
     suspend fun delete(id: Long)
 }
+
+@Dao
+interface WatchDao {
+    @Query("SELECT * FROM watchlist ORDER BY addedAt DESC")
+    fun observeAll(): Flow<List<WatchEntity>>
+
+    @Upsert
+    suspend fun upsert(w: WatchEntity)
+
+    @Query("DELETE FROM watchlist WHERE symbol = :symbol")
+    suspend fun delete(symbol: String)
+}

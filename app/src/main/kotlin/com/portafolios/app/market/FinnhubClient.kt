@@ -24,7 +24,7 @@ class FinnhubClient(private val apiKey: () -> String?) {
     @Serializable data class QuoteDto(val c: Double? = null, val d: Double? = null, val dp: Double? = null, val t: Long? = null)
     @Serializable data class ProfileDto(val name: String? = null, val finnhubIndustry: String? = null, val country: String? = null, val ticker: String? = null)
     @Serializable data class SearchDto(val result: List<SearchItem> = emptyList())
-    @Serializable data class SearchItem(val symbol: String = "", val description: String? = null, val type: String? = null)
+    @Serializable data class SearchItem(val symbol: String = "", val displaySymbol: String? = null, val description: String? = null, val type: String? = null)
 
     class MissingKeyException : IOException("Falta la clave de Finnhub (Ajustes)")
 
@@ -46,4 +46,5 @@ class FinnhubClient(private val apiKey: () -> String?) {
     suspend fun quote(symbol: String): QuoteDto = json.decodeFromString(QuoteDto.serializer(), get("quote", "symbol" to symbol))
     suspend fun profile(symbol: String): ProfileDto = json.decodeFromString(ProfileDto.serializer(), get("stock/profile2", "symbol" to symbol))
     suspend fun search(query: String): SearchDto = json.decodeFromString(SearchDto.serializer(), get("search", "q" to query))
+    suspend fun searchUs(query: String): SearchDto = json.decodeFromString(SearchDto.serializer(), get("search", "q" to query, "exchange" to "US"))
 }

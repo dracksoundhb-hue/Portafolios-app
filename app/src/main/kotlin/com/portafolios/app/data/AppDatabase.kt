@@ -9,8 +9,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 @Database(
-    entities = [PortfolioEntity::class, TransactionEntity::class, ImportEntity::class, QuoteEntity::class, ProfileEntity::class, AlertEntity::class],
-    version = 3,
+    entities = [PortfolioEntity::class, TransactionEntity::class, ImportEntity::class, QuoteEntity::class, ProfileEntity::class, AlertEntity::class, WatchEntity::class],
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -19,8 +19,16 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun imports(): ImportDao
     abstract fun market(): MarketDao
     abstract fun alerts(): AlertDao
+    abstract fun watchlist(): WatchDao
 
     companion object {
+        /** v4: watchlist. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `watchlist` (`symbol` TEXT NOT NULL, `name` TEXT, `addedAt` INTEGER NOT NULL, PRIMARY KEY(`symbol`))")
+            }
+        }
+
         /** v3: risk profile and target allocation per portfolio. */
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -45,7 +53,7 @@ abstract class AppDatabase : RoomDatabase() {
             System.loadLibrary("sqlcipher")
             return Room.databaseBuilder(context, AppDatabase::class.java, "portafolios.db")
                 .openHelperFactory(SupportOpenHelperFactory(passphrase))
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
         }
     }

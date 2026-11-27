@@ -136,3 +136,10 @@ data class AlertEntity(
     val triggeredAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
 )
+
+@Entity(tableName = "watchlist")
+data class WatchEntity(
+    @PrimaryKey val symbol: String,
+    val name: String?,
+    val addedAt: Long = System.currentTimeMillis(),
+)

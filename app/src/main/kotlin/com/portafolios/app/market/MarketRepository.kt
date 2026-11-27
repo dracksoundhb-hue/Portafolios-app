@@ -65,6 +65,22 @@ class MarketRepository(private val db: AppDatabase, private val client: FinnhubC
         return failures
     }
 
+    data class SearchResult(val symbol: String, val name: String, val kind: String)
+
+    /** Stocks and ETFs listed in the US (Finnhub) plus the main crypto pairs (quoted from Binance). */
+    suspend fun search(query: String): List<SearchResult> {
+        val q = query.trim()
+        if (q.isEmpty()) return emptyList()
+        val up = q.uppercase()
+        val cryptoHits = CRYPTO_NAMES.filter { (base, name) -> base.startsWith(up) || name.contains(q, ignoreCase = true) }
+            .map { (base, name) -> SearchResult("$base/USD", name, "Cripto") }
+        val stockHits = if (!client.hasKey) emptyList() else runCatching { client.searchUs(q).result }.getOrDefault(emptyList())
+            .filter { it.symbol.isNotBlank() && '.' !in it.symbol && it.type in STOCK_TYPES }
+            .map { SearchResult(it.symbol, it.description.orEmpty(), if (it.type == "ETP") "ETF" else "Acción") }
+            .sortedBy { if (it.symbol == up) 0 else if (it.symbol.startsWith(up)) 1 else 2 }
+        return (cryptoHits + stockHits).distinctBy { it.symbol }.take(40)
+    }
+
     suspend fun quoteNow(symbol: String): BigDecimal? {
         CRYPTO.find(symbol)?.let { return crypto.quote(it.groupValues[1]).price.toBigDecimal() }
         val ticker = db.market().profile(symbol)?.ticker ?: symbol
@@ -94,6 +110,21 @@ class MarketRepository(private val db: AppDatabase, private val client: FinnhubC
     companion object {
         private const val WEEK_MS = 7L * 24 * 3600 * 1000
         private val CRYPTO = Regex("^([A-Z0-9]+)/(USD|USDT|USDC)$")
+        private val STOCK_TYPES = setOf("Common Stock", "ETP", "ADR", "REIT")
+        /** Main crypto assets (Quantfury lists around 56 pairs). */
+        private val CRYPTO_NAMES = linkedMapOf(
+            "BTC" to "Bitcoin", "ETH" to "Ethereum", "SOL" to "Solana", "XRP" to "XRP", "BNB" to "BNB", "ADA" to "Cardano",
+            "DOGE" to "Dogecoin", "AVAX" to "Avalanche", "DOT" to "Polkadot", "LINK" to "Chainlink", "LTC" to "Litecoin",
+            "BCH" to "Bitcoin Cash", "TRX" to "TRON", "XLM" to "Stellar", "ATOM" to "Cosmos", "NEAR" to "NEAR Protocol",
+            "UNI" to "Uniswap", "AAVE" to "Aave", "HBAR" to "Hedera", "SUI" to "Sui", "APT" to "Aptos", "ARB" to "Arbitrum",
+            "OP" to "Optimism", "FIL" to "Filecoin", "ICP" to "Internet Computer", "ETC" to "Ethereum Classic", "SHIB" to "Shiba Inu",
+            "PEPE" to "Pepe", "THETA" to "Theta Network", "ALGO" to "Algorand", "INJ" to "Injective", "RENDER" to "Render",
+            "TON" to "Toncoin", "HYPE" to "Hyperliquid", "SEI" to "Sei", "TIA" to "Celestia", "MKR" to "Maker", "CRV" to "Curve",
+            "SAND" to "The Sandbox", "MANA" to "Decentraland", "AXS" to "Axie Infinity", "GRT" to "The Graph", "EGLD" to "MultiversX",
+            "FET" to "Artificial Superintelligence", "WLD" to "Worldcoin", "JUP" to "Jupiter", "ENA" to "Ethena", "ONDO" to "Ondo",
+            "POL" to "Polygon", "VET" to "VeChain", "XTZ" to "Tezos", "EOS" to "EOS", "KAS" to "Kaspa", "BONK" to "Bonk",
+            "WIF" to "dogwifhat", "TRUMP" to "Official Trump",
+        )
         private val ISIN = Regex("^[A-Z]{2}[A-Z0-9]{9}[0-9]$")
     }
 }

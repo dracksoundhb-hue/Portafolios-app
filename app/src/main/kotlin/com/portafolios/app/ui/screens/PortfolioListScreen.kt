@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,7 +40,7 @@ class PortfolioListViewModel(private val c: AppContainer) : ViewModel() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PortfolioListScreen(c: AppContainer, onOpen: (Long) -> Unit, onSettings: () -> Unit, onAlerts: () -> Unit, onCreate: () -> Unit) {
+fun PortfolioListScreen(c: AppContainer, onOpen: (Long) -> Unit, onSettings: () -> Unit, onAlerts: () -> Unit, onCreate: () -> Unit, onSearch: () -> Unit) {
     val vm: PortfolioListViewModel = viewModel { PortfolioListViewModel(c) }
     val rows by vm.rows.collectAsStateWithLifecycle()
 
@@ -48,6 +49,7 @@ fun PortfolioListScreen(c: AppContainer, onOpen: (Long) -> Unit, onSettings: () 
             TopAppBar(
                 title = { Text("Mis portafolios") },
                 actions = {
+                    IconButton(onClick = onSearch) { Icon(Icons.Filled.Search, "Buscar activos") }
                     IconButton(onClick = onAlerts) { Icon(Icons.Filled.Notifications, "Alertas") }
                     IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Ajustes") }
                 },
